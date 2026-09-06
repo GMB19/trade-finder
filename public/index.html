@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Redraft Trade Finder — fair 1-for-1 trades</title>
+<link rel="preconnect" href="https://api.fantasycalc.com" />
+<style>
+  :root{
+    --bg:#0b1020; --panel:#141a2e; --panel2:#1b2340; --line:#2a3358;
+    --txt:#e9edf7; --muted:#98a2c0; --acc:#4ade80; --acc2:#60a5fa; --warn:#fbbf24; --bad:#f87171;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:
+    radial-gradient(1000px 600px at 15% -10%,#1c2547 0%,transparent 60%),var(--bg);color:var(--txt);min-height:100vh}
+  .wrap{max-width:1040px;margin:0 auto;padding:28px 18px 80px}
+  header h1{margin:0 0 6px;font-size:28px;letter-spacing:-.5px}
+  header p{margin:0;color:var(--muted);font-size:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin-top:20px}
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+  label{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px}
+  input,select{width:100%;padding:11px 12px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);
+    color:var(--txt);font-size:15px;outline:none}
+  input:focus,select:focus{border-color:var(--acc2)}
+  .autocomp{position:relative}
+  .sugg{position:absolute;z-index:20;left:0;right:0;top:100%;margin-top:4px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:9px;max-height:250px;overflow:auto;display:none}
+  .sugg div{padding:9px 12px;cursor:pointer;font-size:14px;display:flex;justify-content:space-between;gap:10px}
+  .sugg div:hover,.sugg div.on{background:#25305a}
+  .sugg small{color:var(--muted)}
+  button.go{margin-top:16px;width:100%;padding:13px;border:0;border-radius:10px;font-size:16px;font-weight:650;
+    background:linear-gradient(90deg,var(--acc),#22d3ee);color:#06210f;cursor:pointer}
+  button.go:disabled{opacity:.55;cursor:not-allowed}
+  .status{margin-top:10px;font-size:13px;color:var(--muted)}
+  .you{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:6px}
+  .pill{background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:13px}
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px}
+  th{text-align:left;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.08em;
+     padding:8px 8px;border-bottom:1px solid var(--line)}
+  td{padding:11px 8px;border-bottom:1px solid #1f2743;vertical-align:middle}
+  tr:hover td{background:#171e37}
+  .name{font-weight:600}
+  .sub{color:var(--muted);font-size:12px}
+  .verdict{font-weight:700;font-size:13px}
+  .v-even{color:var(--acc)} .v-win{color:var(--acc2)} .v-pay{color:var(--warn)} .v-no{color:var(--bad)}
+  .bar{height:6px;border-radius:4px;background:#232c50;overflow:hidden;min-width:80px}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),#22d3ee)}
+  footer{margin-top:26px;color:var(--muted);font-size:12px;line-height:1.6}
+  a{color:var(--acc2)}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+  .tabs button{background:var(--panel2);border:1px solid var(--line);color:var(--muted);border-radius:8px;
+    padding:7px 13px;font-size:13px;cursor:pointer}
+  .tabs button.on{background:#25305a;color:var(--txt);border-color:var(--acc2)}
+  .empty{color:var(--muted);padding:16px 4px;font-size:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>⚖️ Redraft Trade Finder</h1>
+    <p>Type a player you're willing to give up, pick the position you need, and get fair 1-for-1 targets priced off live redraft trade-calculator values.</p>
+  </header>
+
+  <div class="card">
+    <div class="grid">
+      <div class="autocomp">
+        <label for="player">Player you're trading away</label>
+        <input id="player" placeholder="e.g. Chase Brown" autocomplete="off" />
+        <div class="sugg" id="sugg"></div>
+      </div>
+      <div>
+        <label for="need">Position you need</label>
+        <select id="need">
+          <option value="RB">RB</option><option value="WR">WR</option>
+          <option value="TE">TE</option><option value="QB">QB</option>
+          <option value="FLEX">FLEX (RB/WR/TE)</option><option value="ANY">Any position</option>
+        </select>
+      </div>
+      <div>
+        <label for="teams">League size</label>
+        <select id="teams">
+          <option>8</option><option>10</option><option selected>12</option><option>14</option><option>16</option>
+        </select>
+      </div>
+      <div>
+        <label for="ppr">Scoring</label>
+        <select id="ppr">
+          <option value="1" selected>Full PPR</option><option value="0.5">Half PPR</option><option value="0">Standard</option>
+        </select>
+      </div>
+      <div>
+        <label for="qbs">Format</label>
+        <select id="qbs"><option value="1" selected>1 QB</option><option value="2">Superflex / 2QB</option></select>
+      </div>
+    </div>
+    <button class="go" id="go">Find fair trades</button>
+    <div class="status" id="status">Loading redraft values…</div>
+  </div>
+
+  <div class="card" id="results" style="display:none">
+    <div class="you" id="you"></div>
+    <div class="tabs" id="tabs">
+      <button data-f="fair" class="on">Fairest</button>
+      <button data-f="win">Slight win for me</button>
+      <button data-f="upgrade">Biggest upgrade I can chase</button>
+    </div>
+    <div id="table"></div>
+  </div>
+
+  <footer id="foot"></footer>
+</div>
+
+<script src="fallback-values.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+let POOL = [], SRC = "", LOADED = false, LAST = null, FILTER = "fair";
+
+const norm = s => s.toLowerCase().replace(/[^a-z ]/g,"").replace(/\b(jr|sr|ii|iii|iv)\b/g,"").trim();
+
+function apiURL(){
+  const t=$("#teams").value, p=$("#ppr").value, q=$("#qbs").value;
+  return `https://api.fantasycalc.com/values/current?isDynasty=false&numQbs=${q}&numTeams=${t}&ppr=${p}`;
+}
+
+async function load(){
+  LOADED=false; $("#go").disabled=true; $("#status").textContent="Loading redraft values…";
+  try{
+    const r = await fetch(apiURL(), {cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const j = await r.json();
+    POOL = j.filter(x=>x.player && ["QB","RB","WR","TE"].includes(x.player.position))
+             .map(x=>({name:x.player.name, pos:x.player.position, team:x.player.maybeTeam||"FA",
+                       value:x.redraftValue ?? x.value, posRank:x.positionRank, tier:x.maybeTier,
+                       trend:x.trend30Day||0, age:x.maybeAge}));
+    SRC = `Live FantasyCalc redraft values — ${$("#teams").value}-team, ${$("#qbs").value==="2"?"Superflex":"1QB"}, ${({"1":"full PPR","0.5":"half PPR","0":"standard"})[$("#ppr").value]} · ${POOL.length} players`;
+  }catch(e){
+    POOL = (window.FALLBACK_VALUES?.players||[]).map((p,i)=>({name:p[0],pos:p[1],team:p[2],value:p[3],posRank:null,tier:null,trend:0}));
+    SRC = "⚠️ Live API unreachable — using bundled " + (window.FALLBACK_VALUES?.source||"snapshot");
+  }
+  // derive positional ranks if missing
+  ["QB","RB","WR","TE"].forEach(pos=>{
+    POOL.filter(p=>p.pos===pos).sort((a,b)=>b.value-a.value).forEach((p,i)=>{ if(!p.posRank) p.posRank=i+1; });
+  });
+  LOADED=true; $("#go").disabled=false;
+  $("#status").textContent = SRC;
+  $("#foot").innerHTML = `Values: <a href="https://fantasycalc.com/redraft-rankings" target="_blank" rel="noopener">FantasyCalc</a> redraft market values, crowd-sourced from real trades in Sleeper/MFL leagues and refreshed continuously. Trade calculators price players relative to each other, not to your specific roster — always sanity-check bye weeks, injuries, and playoff schedule.<br>Fairness bands follow the common calculator convention: within ±5% = even, ±5-15% = one side wins slightly, beyond ±25% = unlikely to be accepted 1-for-1.`;
+}
+
+/* ---------- autocomplete ---------- */
+const inp=$("#player"), sug=$("#sugg"); let sIdx=-1, sList=[];
+function search(q){
+  const n=norm(q); if(!n) return [];
+  const starts=[], contains=[];
+  for(const p of POOL){
+    const pn=norm(p.name);
+    if(pn.startsWith(n)) starts.push(p);
+    else if(pn.includes(n) || pn.split(" ").some(w=>w.startsWith(n))) contains.push(p);
+  }
+  return [...starts,...contains].slice(0,8);
+}
+function renderSugg(){
+  if(!sList.length){sug.style.display="none";return;}
+  sug.innerHTML = sList.map((p,i)=>`<div class="${i===sIdx?'on':''}" data-i="${i}"><span>${p.name}</span><small>${p.pos}${p.posRank} · ${p.team} · ${p.value.toLocaleString()}</small></div>`).join("");
+  sug.style.display="block";
+}
+inp.addEventListener("input",()=>{sList=search(inp.value);sIdx=-1;renderSugg();});
+inp.addEventListener("keydown",e=>{
+  if(sug.style.display==="none"){ if(e.key==="Enter") run(); return; }
+  if(e.key==="ArrowDown"){sIdx=Math.min(sIdx+1,sList.length-1);renderSugg();e.preventDefault();}
+  else if(e.key==="ArrowUp"){sIdx=Math.max(sIdx-1,0);renderSugg();e.preventDefault();}
+  else if(e.key==="Enter"){ if(sIdx>=0){pick(sList[sIdx]);} sug.style.display="none"; run(); e.preventDefault(); }
+  else if(e.key==="Escape"){sug.style.display="none";}
+});
+sug.addEventListener("mousedown",e=>{const d=e.target.closest("[data-i]"); if(d){pick(sList[+d.dataset.i]); sug.style.display="none"; run();}});
+document.addEventListener("click",e=>{if(!e.target.closest(".autocomp")) sug.style.display="none";});
+function pick(p){ inp.value=p.name; }
+
+/* ---------- core recommendation ---------- */
+function findPlayer(q){
+  const n=norm(q); if(!n) return null;
+  let best=null,score=-1;
+  for(const p of POOL){
+    const pn=norm(p.name); let s=-1;
+    if(pn===n) s=100; else if(pn.startsWith(n)) s=80 - pn.length*0.01;
+    else if(pn.includes(n)) s=60 - pn.length*0.01;
+    else if(pn.split(" ").some(w=>w.startsWith(n))) s=50;
+    if(s>score){score=s;best=p;}
+  }
+  return score>0?best:null;
+}
+function verdict(diffPct){ // diffPct = (target - mine)/mine
+  const a=Math.abs(diffPct);
+  if(a<=5)  return ["Dead even","v-even"];
+  if(diffPct>0 && a<=15) return ["You win slightly","v-win"];
+  if(diffPct<0 && a<=15) return ["You pay slightly","v-pay"];
+  if(diffPct>0 && a<=25) return ["You win — they may decline","v-win"];
+  if(diffPct<0 && a<=25) return ["You overpay","v-pay"];
+  return [diffPct>0?"Long shot — big win for you":"Big overpay","v-no"];
+}
+function positions(need){
+  if(need==="FLEX") return ["RB","WR","TE"];
+  if(need==="ANY") return ["QB","RB","WR","TE"];
+  return [need];
+}
+
+function run(){
+  if(!LOADED) return;
+  const me = findPlayer(inp.value);
+  if(!me){ $("#status").textContent = "Couldn't find that player — try another spelling. " ; $("#results").style.display="none"; return; }
+  $("#status").textContent = SRC;
+  const need = $("#need").value;
+  const allow = positions(need);
+  const cands = POOL.filter(p=>allow.includes(p.pos) && norm(p.name)!==norm(me.name))
+    .map(p=>{
+      const diff = (p.value - me.value)/me.value*100;
+      return {...p, diff, absDiff:Math.abs(diff)};
+    })
+    .filter(p=>p.absDiff<=35);
+  LAST = {me, cands, need};
+  render();
+}
+
+function render(){
+  const {me,cands,need}=LAST;
+  $("#results").style.display="block";
+  $("#you").innerHTML = `<span class="pill"><b>Giving up:</b> ${me.name} — ${me.pos}${me.posRank} (${me.team})</span>
+    <span class="pill"><b>Trade value:</b> ${me.value.toLocaleString()}</span>
+    <span class="pill"><b>Need:</b> ${need}</span>
+    ${me.trend?`<span class="pill">30-day trend: ${me.trend>0?"▲ +":"▼ "}${me.trend.toLocaleString()}</span>`:""}`;
+
+  let list=[...cands];
+  if(FILTER==="fair") list.sort((a,b)=>a.absDiff-b.absDiff);
+  if(FILTER==="win")  list = list.filter(p=>p.diff>2).sort((a,b)=>{
+     const sa=Math.abs(a.diff-9), sb=Math.abs(b.diff-9); return sa-sb; });
+  if(FILTER==="upgrade") list = list.filter(p=>p.diff>0).sort((a,b)=>b.diff-a.diff);
+  list = list.slice(0,12);
+
+  if(!list.length){ $("#table").innerHTML=`<div class="empty">No 1-for-1 matches in that range. Try a different position, or widen your search — a player of this value may need a 2-for-1.</div>`; return; }
+
+  $("#table").innerHTML = `<table><thead><tr>
+    <th>Target</th><th>Value</th><th>Gap</th><th>Fairness</th><th>Verdict</th><th>Note</th></tr></thead><tbody>
+    ${list.map(p=>{
+      const [v,cls]=verdict(p.diff);
+      const fair=Math.max(0,100-p.absDiff*2.6);
+      const dv=p.value-me.value;
+      return `<tr>
+        <td><div class="name">${p.name}</div><div class="sub">${p.pos}${p.posRank} · ${p.team}</div></td>
+        <td>${p.value.toLocaleString()}</td>
+        <td>${dv>0?"+":""}${dv.toLocaleString()}<div class="sub">${p.diff>0?"+":""}${p.diff.toFixed(1)}%</div></td>
+        <td><div class="bar"><i style="width:${fair.toFixed(0)}%"></i></div><div class="sub">${fair.toFixed(0)}/100</div></td>
+        <td class="verdict ${cls}">${v}</td>
+        <td class="sub">${note(me,p)}</td>
+      </tr>`;
+    }).join("")}
+  </tbody></table>`;
+}
+
+function note(me,p){
+  const out=[];
+  if(p.pos!==me.pos) out.push(`${me.pos}→${p.pos} positional swap`);
+  if(p.trend<=-400) out.push("value falling — buy-low window");
+  else if(p.trend>=400) out.push("value rising — may cost more soon");
+  if(Math.abs(p.diff)<=3) out.push("send as-is, no sweetener needed");
+  else if(p.diff<-12) out.push("ask them to add a bench piece");
+  else if(p.diff>12) out.push("expect a counter — consider adding depth");
+  return out.join(" · ") || "clean 1-for-1";
+}
+
+$("#go").addEventListener("click",run);
+$("#tabs").addEventListener("click",e=>{
+  const b=e.target.closest("button"); if(!b||!LAST) return;
+  [...$("#tabs").children].forEach(x=>x.classList.remove("on")); b.classList.add("on");
+  FILTER=b.dataset.f; render();
+});
+["#teams","#ppr","#qbs"].forEach(id=>$(id).addEventListener("change",async()=>{ await load(); if(LAST) run(); }));
+$("#need").addEventListener("change",()=>{ if(LAST) run(); });
+load();
+</script>
+</body>
+</html>
